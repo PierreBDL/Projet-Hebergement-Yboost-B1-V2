@@ -2,7 +2,8 @@ services:
   - type: web
     name: messagerie-app
     runtime: go
-    buildCommand: cd server && go build -tags netgo -ldflags '-s -w' -o ../app
+    # On supprime le "cd server" et on corrige le chemin de sortie (-o app au lieu de -o ../app)
+    buildCommand: go build -tags netgo -ldflags '-s -w' -o app
     startCommand: ./app
     envVars:
       - key: PORT
