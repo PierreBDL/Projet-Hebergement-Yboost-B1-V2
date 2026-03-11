@@ -109,17 +109,33 @@ async function loadMessages(contactId) {
         const data = await response.json();
         const list = document.getElementById('messagesList');
         
-        list.innerHTML = '<h2>Discussion</h2>' + (data.data || []).map(msg => `
-            <div class="message ${msg.sender === currentUserId ? 'emetteur' : 'recepteur'}">
+        // On s'assure que data.data existe
+        const messages = data.data || [];
+        
+        list.innerHTML = '<h2>Discussion</h2>' + messages.map(msg => {
+            // Déterminer si c'est nous qui envoyons (comparaison avec currentUserId)
+            const isMe = msg.sender === currentUserId;
+            
+            return `
+            <div class="message ${isMe ? 'emetteur' : 'recepteur'}">
                 <div class="message-content">
                     ${msg.filepath ? renderMedia(msg.filepath) : ''}
-                    ${msg.content && msg.content !== 'null' ? `<h3 class="messagesRemplis">${escapeHtml(msg.content)}</h3>` : ''}
+                    ${msg.content ? `<h3 class="messagesRemplis">${escapeHtml(msg.content)}</h3>` : ''}
                 </div>
                 <span class="date">${new Date(msg.timestamp).toLocaleString('fr-FR')}</span>
             </div>
-        `).join('');
+        `}).join('');
         list.scrollTop = list.scrollHeight;
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error("Erreur chargement messages:", e); }
+}
+
+function renderMedia(path) {
+    // On retire les sous-dossiers /images/ et /videos/ car Go enregistre tout à la racine de uploads/messages
+    const fullPath = `/uploads/messages/${path}`;
+    if (path.match(/\.(jpg|jpeg|png|webp|avif)$/i)) {
+        return `<div class="pj-container"><img src="${fullPath}" alt="Image" style="max-width:200px;"></div>`;
+    }
+    return `<div class="pj-container"><video controls style="max-width:200px;"><source src="${fullPath}" type="video/mp4"></video></div>`;
 }
 
 async function handleSendMessage(e) {

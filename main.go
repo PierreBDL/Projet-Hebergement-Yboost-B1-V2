@@ -63,13 +63,13 @@ type Contact struct {
 func (Contact) TableName() string { return "contact" }
 
 type Message struct {
-	ID           int       `gorm:"primaryKey;column:idmessage" json:"id"`
-	SenderID     int       `gorm:"column:idemetteur" json:"senderId"`
-	ReceiverID   int       `gorm:"column:idreceveur" json:"receiverId"`
-	Content      string    `gorm:"column:contenu" json:"content"`
-	FilePath     *string   `gorm:"column:chemin" json:"filePath"`
-	DateCreation time.Time `gorm:"column:date_creation;autoCreateTime:milli" json:"dateCreation"`
-	SenderName   string    `gorm:"-" json:"senderName"`
+    ID           int       `gorm:"primaryKey;column:idmessage" json:"id"`
+    SenderID     int       `gorm:"column:idemetteur" json:"sender"`
+    ReceiverID   int       `gorm:"column:idreceveur" json:"receiver"`
+    Content      string    `gorm:"column:contenu" json:"content"`
+    FilePath     *string   `gorm:"column:chemin" json:"filepath"`
+    DateCreation time.Time `gorm:"column:date_creation;autoCreateTime:milli" json:"timestamp"`
+    SenderName   string    `gorm:"-" json:"senderName"`
 }
 
 func (Message) TableName() string { return "messages" }
@@ -123,6 +123,7 @@ func main() {
 	// Routes Statiques
 	fs := http.FileServer(http.Dir("front"))
 	http.Handle("/front/", http.StripPrefix("/front/", fs))
+	http.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir("uploads"))))
 
 	// Routes Pages
 	http.HandleFunc("/", redirectHome)
