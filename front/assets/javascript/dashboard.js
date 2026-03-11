@@ -74,7 +74,7 @@ async function loadInvitations() {
         invitationsList.innerHTML = data.data.map(invitation => `
             <div class="invitation-item">
                 <div class="invitation-info">
-                    <img src="../assets/images/avatar.jpg" alt="avatar">
+                    <img src="/front/assets/images/avatar.jpg" alt="avatar">
                     <span>${escapeHtml(invitation.senderUsername)}</span>
                 </div>
                 <div class="invitation-actions">

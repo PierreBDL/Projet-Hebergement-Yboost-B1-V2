@@ -258,7 +258,7 @@ func connectDB() (*gorm.DB, error) {
 func redirectHome(w http.ResponseWriter, r *http.Request) {
 	session := getSession(r)
 	if session != nil && session.Access == "pass" {
-		http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
+		http.Redirect(w, r, "/front/template/dashboard.html", http.StatusSeeOther)
 	} else {
 		http.Redirect(w, r, "/front/template/login.html", http.StatusSeeOther)
 	}
@@ -267,7 +267,7 @@ func redirectHome(w http.ResponseWriter, r *http.Request) {
 // handleLogin traite la connexion avec GORM
 func handleLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		serveHTML(w, "front/template/login.html")
+		serveHTML(w, "/front/template/login.html")
 		return
 	}
 
@@ -340,7 +340,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 // handleSignup traite l'inscription avec GORM
 func handleSignup(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		serveHTML(w, "front/template/inscription.html")
+		serveHTML(w, "/front/template/inscription.html")
 		return
 	}
 
@@ -401,7 +401,7 @@ func handleSignup(w http.ResponseWriter, r *http.Request) {
 
 // handleDashboard sert la page du tableau de bord
 func handleDashboard(w http.ResponseWriter, r *http.Request) {
-	serveHTML(w, "front/template/dashboard.html")
+	serveHTML(w, "/front/template/dashboard.html")
 }
 
 // handleGetContacts retourne les contacts avec GORM
