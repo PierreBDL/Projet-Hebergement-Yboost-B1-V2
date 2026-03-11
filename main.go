@@ -406,7 +406,7 @@ func requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func serveHTML(w http.ResponseWriter, path string) {
+func serveHTML(w http.ResponseWriter, r *http.Request, path string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	http.ServeFile(w, r, path)
 }
