@@ -5,82 +5,88 @@ let currentUserId = null;
 let currentContactId = null;
 
 // =========================
-// Initialisation au chargement
+// Utilitaire auth
+// =========================
+async function fetchWithAuth(url, options = {}) {
+    const token = localStorage.getItem('session_token');
+    options.headers = {
+        'Authorization': token || '',
+        ...(options.headers || {})
+    };
+
+    const response = await fetch(url, options);
+    if (response.status === 401) {
+        localStorage.removeItem('session_token');
+        window.location.href = '/front/template/login.html';
+        return;
+    }
+    return response;
+}
+
+// =========================
+// Initialisation
 // =========================
 document.addEventListener('DOMContentLoaded', () => {
+    const token = localStorage.getItem('session_token');
+    if (!token) {
+        window.location.href = '/front/template/login.html';
+        return;
+    }
     initDashboard();
     setupEventListeners();
 });
 
 async function initDashboard() {
     try {
-        const response = await fetch('/api/session');
+        const response = await fetchWithAuth('/api/session');
         const data = await response.json();
-        
+
         if (!data.success) {
             window.location.href = '/front/template/login.html';
             return;
         }
 
-        currentUserId = data.data.id;
-        // Correction de l'affichage du nom
+        currentUserId = Number(data.data.id);
         document.getElementById('username').textContent = data.data.user;
-        document.getElementById('content').style.display = 'flex'; // 'flex' pour respecter ton CSS
-        
+        document.getElementById('content').style.display = 'flex';
+
         loadContacts();
         loadInvitations();
     } catch (error) {
         console.error('Erreur initialisation:', error);
-        window.location.href = '/front/template/login.html';
     }
 }
 
 // =========================
-// Gestionnaires d'événements
+// Event Listeners
 // =========================
 function setupEventListeners() {
-    // Envoi de message
-    document.getElementById('sendMessageForm')?.addEventListener('submit', handleSendMessage);
-
-    // Modal Nouveau Contact
-    const dialog = document.getElementById('favDialog');
-    document.getElementById('showDialog')?.addEventListener('click', () => dialog.showModal());
-    document.getElementById('cancelBtn')?.addEventListener('click', () => dialog.close());
-    document.getElementById('formInvitation')?.addEventListener('submit', handleSendInvitation);
-
-    // Menu pièces jointes
-    const btnPJ = document.getElementById('piece-jointe');
-    const menuPJ = document.querySelector('.piece-jointe-menu');
-    btnPJ?.addEventListener('click', () => menuPJ.classList.toggle('piece-jointe-menu-ouvert'));
-
-    // Auto-resize textarea
-    const textarea = document.getElementById('messageRediger');
-    textarea?.addEventListener('input', function() {
-        this.style.height = 'auto';
-        this.style.height = (this.scrollHeight) + 'px';
+    document.getElementById('showDialog').addEventListener('click', () => {
+        document.getElementById('favDialog').showModal();
     });
 
-    // Feedback visuel upload
-    document.querySelectorAll('input[type="file"]').forEach(input => {
-        input.addEventListener('change', function() {
-            if (this.files && this.files[0]) {
-                document.getElementById('piece-jointe').style.backgroundColor = '#4caf50';
-                Swal.fire({ icon: 'info', title: 'Fichier prêt', text: this.files[0].name, timer: 1000, showConfirmButton: false });
-            }
-        });
+    document.getElementById('cancelBtn').addEventListener('click', () => {
+        document.getElementById('favDialog').close();
+    });
+
+    document.getElementById('formInvitation').addEventListener('submit', handleSendInvitation);
+    document.getElementById('sendMessageForm').addEventListener('submit', handleSendMessage);
+
+    document.getElementById('piece-jointe').addEventListener('click', () => {
+        const menu = document.querySelector('.piece-jointe-menu');
+        menu.style.display = menu.style.display === 'flex' ? 'none' : 'flex';
     });
 }
 
 // =========================
-// Fonctions API
+// Contacts
 // =========================
-
 async function loadContacts() {
     try {
-        const response = await fetch('/api/contacts');
+        const response = await fetchWithAuth('/api/contacts');
         const data = await response.json();
         const list = document.getElementById('contactsList');
-        
+
         if (!data.data || data.data.length === 0) {
             list.innerHTML = '<p class="contactVide">Aucun contact</p>';
             return;
@@ -92,7 +98,9 @@ async function loadContacts() {
                 <span>${escapeHtml(c.username)}</span>
             </a>
         `).join('');
-    } catch (e) { console.error(e); }
+    } catch (e) {
+        console.error('Erreur contacts:', e);
+    }
 }
 
 async function selectContact(contactId, element) {
@@ -103,19 +111,18 @@ async function selectContact(contactId, element) {
     loadMessages(contactId);
 }
 
+// =========================
+// Messages
+// =========================
 async function loadMessages(contactId) {
     try {
-        const response = await fetch(`/api/messages?contact=${contactId}`);
+        const response = await fetchWithAuth(`/api/messages?contact=${contactId}`);
         const data = await response.json();
         const list = document.getElementById('messagesList');
-        
-        // On s'assure que data.data existe
         const messages = data.data || [];
-        
+
         list.innerHTML = '<h2>Discussion</h2>' + messages.map(msg => {
-            // Déterminer si c'est nous qui envoyons (comparaison avec currentUserId)
-            const isMe = msg.sender === currentUserId;
-            
+            const isMe = Number(msg.sender) === currentUserId;
             return `
             <div class="message ${isMe ? 'emetteur' : 'recepteur'}">
                 <div class="message-content">
@@ -126,81 +133,125 @@ async function loadMessages(contactId) {
             </div>
         `}).join('');
         list.scrollTop = list.scrollHeight;
-    } catch (e) { console.error("Erreur chargement messages:", e); }
-}
-
-function renderMedia(path) {
-    // On retire les sous-dossiers /images/ et /videos/ car Go enregistre tout à la racine de uploads/messages
-    const fullPath = `/uploads/messages/${path}`;
-    if (path.match(/\.(jpg|jpeg|png|webp|avif)$/i)) {
-        return `<div class="pj-container"><img src="${fullPath}" alt="Image" style="max-width:200px;"></div>`;
+    } catch (e) {
+        console.error('Erreur messages:', e);
     }
-    return `<div class="pj-container"><video controls style="max-width:200px;"><source src="${fullPath}" type="video/mp4"></video></div>`;
 }
 
 async function handleSendMessage(e) {
     e.preventDefault();
+    if (!currentContactId) return;
+
     const formData = new FormData(e.target);
     formData.append('receiverId', currentContactId);
 
     const img = document.getElementById('uploadImage').files[0];
     const vid = document.getElementById('uploadVideo').files[0];
-    if (img) { formData.append('file', img); formData.append('fileType', 'image'); }
-    else if (vid) { formData.append('file', vid); formData.append('fileType', 'video'); }
+    if (img) formData.append('file', img);
+    else if (vid) formData.append('file', vid);
 
-    const res = await fetch('/api/send-message', { method: 'POST', body: formData });
+    const res = await fetchWithAuth('/api/send-message', { method: 'POST', body: formData });
     const data = await res.json();
     if (data.success) {
         e.target.reset();
+        document.querySelector('.piece-jointe-menu').style.display = 'none';
         document.getElementById('piece-jointe').style.backgroundColor = '';
         loadMessages(currentContactId);
+    }
+}
+
+// =========================
+// Invitations
+// =========================
+async function loadInvitations() {
+    try {
+        const res = await fetchWithAuth('/api/invitations');
+        const data = await res.json();
+        const list = document.getElementById('invitationsList');
+        if (!list) return;
+
+        const invitations = data.data || [];
+        if (invitations.length === 0) {
+            list.innerHTML = '<p class="contactVide">Aucune invitation</p>';
+            return;
+        }
+
+        list.innerHTML = invitations.map(inv => `
+            <div class="invitation-item">
+                <div class="invitation-info">
+                    <img src="/front/assets/images/avatar.jpg" alt="avatar">
+                    <span>${escapeHtml(inv.senderUsername)}</span>
+                </div>
+                <div class="invitation-actions">
+                    <button class="btn-accepter" onclick="respondInvitation(${inv.senderId}, 'accepter')">✓</button>
+                    <button class="btn-refuser" onclick="respondInvitation(${inv.senderId}, 'refuser')">✗</button>
+                </div>
+            </div>
+        `).join('');
+    } catch (e) {
+        console.error('Erreur invitations:', e);
     }
 }
 
 async function handleSendInvitation(e) {
     e.preventDefault();
     const pseudo = document.getElementById('nomNouveauContact').value.trim();
-    const res = await fetch('/api/send-invitation', {
+    if (!pseudo) return;
+
+    const res = await fetchWithAuth('/api/send-invitation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: `pseudoDestinataire=${encodeURIComponent(pseudo)}`
     });
     const data = await res.json();
+
     if (data.success) {
-        Swal.fire('Succès', 'Invitation envoyée', 'success');
+        Swal.fire('Succès', 'Invitation envoyée !', 'success');
         document.getElementById('favDialog').close();
         e.target.reset();
     } else {
-        Swal.fire('Erreur', data.error, 'error');
+        Swal.fire('Erreur', data.error || 'Utilisateur introuvable', 'error');
     }
 }
 
-// Helpers
-function escapeHtml(t) {
-    const d = document.createElement('div');
-    d.textContent = t;
-    return d.innerHTML;
-}
-
-function renderMedia(path) {
-    if (path.match(/\.(jpg|jpeg|png|webp)$/i)) {
-        return `<div class="pj-container"><img src="/uploads/messages/images/${path}" alt="Image"></div>`;
-    }
-    return `<div class="pj-container"><video controls><source src="/uploads/messages/videos/${path}" type="video/mp4"></video></div>`;
-}
-
-// Ces fonctions doivent être globales pour les onclick du HTML
-window.selectContact = selectContact;
-window.respondInvitation = async (senderId, action) => {
-    await fetch('/api/invitation-response', {
+async function respondInvitation(senderId, action) {
+    const res = await fetchWithAuth('/api/invitation-response', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `senderId=${senderId}&action=${action}`
+        body: `senderId=${senderId}&action=${encodeURIComponent(action)}`
     });
-    loadInvitations();
-    loadContacts();
-};
+    const data = await res.json();
+    if (data.success) {
+        loadInvitations();
+        loadContacts();
+    }
+}
+
+// =========================
+// Déconnexion
+// =========================
 window.deconnexion = async () => {
-    await fetch('/api/logout', { method: 'POST' });
+    await fetchWithAuth('/api/logout', { method: 'POST' });
+    localStorage.removeItem('session_token');
     window.location.href = '/front/template/login.html';
 };
+
+// =========================
+// Utilitaires
+// =========================
+function renderMedia(filepath) {
+    const ext = filepath.split('.').pop().toLowerCase();
+    const url = `/uploads/messages/${filepath}`;
+    if (['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext)) {
+        return `<img src="${url}" alt="image" style="max-width:250px; border-radius:8px;">`;
+    } else if (['mp4', 'webm'].includes(ext)) {
+        return `<video src="${url}" controls style="max-width:250px; border-radius:8px;"></video>`;
+    }
+    return `<a href="${url}" target="_blank">📎 Fichier joint</a>`;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.appendChild(document.createTextNode(text));
+    return div.innerHTML;
+}

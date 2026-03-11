@@ -57,6 +57,7 @@
                 const data = await response.json();
                 
                 if (data.success) {
+                    localStorage.setItem('session_token', data.data.token);
                     window.location.href = '/dashboard';
                 } else {
                     messageDiv.textContent = data.error || 'Erreur de connexion';

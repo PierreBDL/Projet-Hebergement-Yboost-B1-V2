@@ -177,22 +177,22 @@ main {
     white-space: nowrap;
 }
 
-.btn-accepter {
+.invitation-actions .btn-accepter {
     background-color: #4caf50;
     color: white;
 }
 
-.btn-accepter:hover {
+.invitation-actions .btn-accepter:hover {
     background-color: #45a049;
     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
-.btn-refuser {
+.invitation-actions .btn-refuser {
     background-color: #f44336;
     color: white;
 }
 
-.btn-refuser:hover {
+.invitation-actions .btn-refuser:hover {
     background-color: #da190b;
     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
