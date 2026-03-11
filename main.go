@@ -35,12 +35,15 @@ type Config struct {
 	Port        string
 }
 
+// Session est maintenant un modèle GORM pour la base de données
 type Session struct {
-	UserID    int
-	Username  string
-	Access    string
-	CreatedAt time.Time
+	ID        string    `gorm:"primaryKey;column:idsession"`
+	UserID    int       `gorm:"column:idcompte"`
+	Username  string    `gorm:"column:identifiant"`
+	CreatedAt time.Time `gorm:"column:date_creation"`
 }
+
+func (Session) TableName() string { return "sessions" }
 
 type Compte struct {
 	ID       int    `gorm:"primaryKey;column:idcompte" json:"id"`
@@ -52,6 +55,7 @@ type Compte struct {
 
 func (Compte) TableName() string { return "compte" }
 
+// ... (Gardes tes autres structures Contact, Message, etc. telles quelles) ...
 type Contact struct {
 	ID           int       `gorm:"primaryKey;column:idcontact" json:"id"`
 	SenderID     int       `gorm:"column:idpossesseur" json:"senderId"`
@@ -59,33 +63,28 @@ type Contact struct {
 	Status       string    `gorm:"column:statut" json:"status"`
 	DateCreation time.Time `gorm:"column:date_creation;autoCreateTime:milli" json:"dateCreation"`
 }
-
 func (Contact) TableName() string { return "contact" }
 
 type Message struct {
-    ID           int       `gorm:"primaryKey;column:idmessage" json:"id"`
-    SenderID     int       `gorm:"column:idemetteur" json:"sender"`
-    ReceiverID   int       `gorm:"column:idreceveur" json:"receiver"`
-    Content      string    `gorm:"column:contenu" json:"content"`
-    FilePath     *string   `gorm:"column:chemin" json:"filepath"`
-    DateCreation time.Time `gorm:"column:date_creation;autoCreateTime:milli" json:"timestamp"`
-    SenderName   string    `gorm:"-" json:"senderName"`
+	ID           int       `gorm:"primaryKey;column:idmessage" json:"id"`
+	SenderID     int       `gorm:"column:idemetteur" json:"sender"`
+	ReceiverID   int       `gorm:"column:idreceveur" json:"receiver"`
+	Content      string    `gorm:"column:contenu" json:"content"`
+	FilePath     *string   `gorm:"column:chemin" json:"filepath"`
+	DateCreation time.Time `gorm:"column:date_creation;autoCreateTime:milli" json:"timestamp"`
+	SenderName   string    `gorm:"-" json:"senderName"`
 }
-
 func (Message) TableName() string { return "messages" }
 
-// Types pour les réponses API
 type ContactResponse struct {
 	ID       int    `json:"id"`
 	Username string `json:"username"`
 }
-
 type Invitation struct {
 	ID             int    `json:"id"`
 	SenderID       int    `json:"senderId"`
 	SenderUsername string `json:"senderUsername"`
 }
-
 type Response struct {
 	Success bool        `json:"success"`
 	Message string      `json:"message,omitempty"`
@@ -96,46 +95,40 @@ type Response struct {
 // ===== VARIABLES GLOBALES =====
 
 var (
-	db        *gorm.DB
-	config    Config
-	sessions  = make(map[string]*Session)
-	masterKey = []byte("ma_cle_secrete_32_caracteres_!!!") // 32 octets pour AES-256
+	db     *gorm.DB
+	config Config
+	// Suppression de la map sessions en mémoire
 )
 
 // ===== INITIALISATION ET CONNEXION =====
 
 func main() {
-	// Chargement des envs
 	godotenv.Load(".env.local")
 	godotenv.Load(".env.example")
 
 	config = parseConfig()
 
-	// Connexion DB
 	var err error
 	db, err = connectDB()
 	if err != nil {
 		log.Printf("⚠️ Erreur DB: %v", err)
 	} else {
 		log.Println("✅ Base de données connectée")
+		// Automigration pour créer la table des sessions si elle n'existe pas
+		db.AutoMigrate(&Session{})
 	}
 
-	// Routes Statiques
+	// Routes
 	fs := http.FileServer(http.Dir("front"))
 	http.Handle("/front/", http.StripPrefix("/front/", fs))
 	http.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir("uploads"))))
 
-	// Routes Pages
 	http.HandleFunc("/", redirectHome)
 	http.HandleFunc("/dashboard", requireAuth(handleDashboard))
-
-	// Routes API Authentification
 	http.HandleFunc("/login", handleLogin)
 	http.HandleFunc("/signup", handleSignup)
 	http.HandleFunc("/api/logout", handleLogout)
 	http.HandleFunc("/api/session", handleGetSession)
-
-	// Routes API Fonctionnalités
 	http.HandleFunc("/api/contacts", requireAuth(handleGetContacts))
 	http.HandleFunc("/api/messages", requireAuth(handleGetMessages))
 	http.HandleFunc("/api/send-message", requireAuth(handleSendMessage))
@@ -149,10 +142,79 @@ func main() {
 	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
 
-func parseConfig() Config {
-	cfg := Config{
-		Port: os.Getenv("PORT"),
+// ===== HANDLERS AUTH =====
+
+func handleLogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		serveHTML(w, r, "front/template/login.html")
+		return
 	}
+
+	username := r.FormValue("identifiant")
+	password := r.FormValue("password")
+
+	var compte Compte
+	if err := db.Where("identifiant = ?", username).First(&compte).Error; err != nil {
+		respondJSON(w, http.StatusUnauthorized, Response{Success: false, Error: "Identifiants incorrects"})
+		return
+	}
+
+	decrypted, _ := decryptPass(compte.Password, compte.Key, compte.IV)
+	if decrypted != password {
+		respondJSON(w, http.StatusUnauthorized, Response{Success: false, Error: "Identifiants incorrects"})
+		return
+	}
+
+	// Génération session et enregistrement en BASE DE DONNÉES
+	sessionID := generateSessionID()
+	newSession := Session{
+		ID:        sessionID,
+		UserID:    compte.ID,
+		Username:  username,
+		CreatedAt: time.Now(),
+	}
+
+	if err := db.Create(&newSession).Error; err != nil {
+		respondJSON(w, http.StatusInternalServerError, Response{Success: false, Error: "Erreur lors de la création de session"})
+		return
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name: "session_id", Value: sessionID, Path: "/", HttpOnly: true,
+	})
+
+	respondJSON(w, http.StatusOK, Response{Success: true})
+}
+
+func getSession(r *http.Request) *Session {
+	c, err := r.Cookie("session_id")
+	if err != nil {
+		return nil
+	}
+
+	var s Session
+	// On cherche l'ID de session directement en base de données
+	if err := db.Where("idsession = ?", c.Value).First(&s).Error; err != nil {
+		return nil
+	}
+	return &s
+}
+
+func handleLogout(w http.ResponseWriter, r *http.Request) {
+	c, err := r.Cookie("session_id")
+	if err == nil {
+		// On supprime la session de la base de données
+		db.Where("idsession = ?", c.Value).Delete(&Session{})
+	}
+	
+	http.SetCookie(w, &http.Cookie{Name: "session_id", Value: "", Path: "/", MaxAge: -1})
+	respondJSON(w, http.StatusOK, Response{Success: true})
+}
+
+// ... (Copier-coller le reste de tes fonctions utilitaires encrypt/decrypt/parseConfig) ...
+
+func parseConfig() Config {
+	cfg := Config{Port: os.Getenv("PORT")}
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL != "" {
 		cfg.DBType = "pgsql"
@@ -170,212 +232,14 @@ func parseConfig() Config {
 
 func connectDB() (*gorm.DB, error) {
 	var dialector gorm.Dialector
-
 	if config.DBType == "pgsql" {
-		// Version pour Render/Supabase
-		dialector = postgres.New(postgres.Config{
-			DSN:                  config.DatabaseURL,
-			PreferSimpleProtocol: true,
-		})
+		dialector = postgres.New(postgres.Config{DSN: config.DatabaseURL, PreferSimpleProtocol: true})
 	} else {
-		// Version MySQL locale
 		dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=true",
 			config.DBUser, config.DBPass, config.DBHost, config.DBPort, config.DBName)
 		dialector = mysql.Open(dsn)
 	}
-
 	return gorm.Open(dialector, &gorm.Config{})
-}
-
-// ===== HANDLERS AUTH =====
-
-func handleLogin(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-        serveHTML(w, r, "front/template/login.html")
-        return
-    }
-
-	username := r.FormValue("identifiant")
-	password := r.FormValue("password")
-
-	var compte Compte
-	if err := db.Where("identifiant = ?", username).First(&compte).Error; err != nil {
-		respondJSON(w, http.StatusUnauthorized, Response{Success: false, Error: "Identifiants incorrects"})
-		return
-	}
-
-	decrypted, _ := decryptPass(compte.Password, compte.Key, compte.IV)
-	if decrypted != password {
-		respondJSON(w, http.StatusUnauthorized, Response{Success: false, Error: "Identifiants incorrects"})
-		return
-	}
-
-	sessionID := generateSessionID()
-	sessions[sessionID] = &Session{
-		UserID:    compte.ID,
-		Username:  username,
-		Access:    "pass",
-		CreatedAt: time.Now(),
-	}
-
-	http.SetCookie(w, &http.Cookie{
-		Name: "session_id", Value: sessionID, Path: "/", HttpOnly: true,
-	})
-
-	respondJSON(w, http.StatusOK, Response{Success: true})
-}
-
-func handleSignup(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		serveHTML(w, r, "front/template/inscription.html")
-		return
-	}
-
-	username := r.FormValue("identifiant")
-	password := r.FormValue("password")
-
-	var count int64
-	db.Model(&Compte{}).Where("identifiant = ?", username).Count(&count)
-	if count > 0 {
-		respondJSON(w, http.StatusBadRequest, Response{Success: false, Error: "Existe déjà"})
-		return
-	}
-
-	key := make([]byte, 32)
-	rand.Read(key)
-	iv := make([]byte, 16)
-	rand.Read(iv)
-	encrypted := encryptPass(password, key, iv)
-
-	newCompte := Compte{Username: username, Password: encrypted, IV: iv, Key: key}
-	if err := db.Create(&newCompte).Error; err != nil {
-		respondJSON(w, http.StatusInternalServerError, Response{Success: false, Error: "Erreur création"})
-		return
-	}
-
-	respondJSON(w, http.StatusOK, Response{Success: true})
-}
-
-// ===== HANDLERS MESSAGERIE =====
-
-func handleGetContacts(w http.ResponseWriter, r *http.Request) {
-	session := getSession(r)
-	var comptes []Compte
-	db.Raw("SELECT * FROM compte WHERE idcompte IN (SELECT iddestinataire FROM contact WHERE idpossesseur = ? AND statut = 'accepte')", session.UserID).Scan(&comptes)
-
-	var contacts []ContactResponse
-	for _, c := range comptes {
-		contacts = append(contacts, ContactResponse{ID: c.ID, Username: c.Username})
-	}
-	respondJSON(w, http.StatusOK, Response{Success: true, Data: contacts})
-}
-
-func handleGetMessages(w http.ResponseWriter, r *http.Request) {
-	session := getSession(r)
-	contactID := r.URL.Query().Get("contact")
-	cID, _ := strconv.Atoi(contactID)
-
-	var messages []Message
-	db.Where("(idemetteur = ? AND idreceveur = ?) OR (idemetteur = ? AND idreceveur = ?)", 
-		session.UserID, cID, cID, session.UserID).Order("date_creation ASC").Find(&messages)
-
-	for i, msg := range messages {
-		var sender Compte
-		db.Select("identifiant").Where("idcompte = ?", msg.SenderID).First(&sender)
-		messages[i].SenderName = sender.Username
-	}
-	respondJSON(w, http.StatusOK, Response{Success: true, Data: messages})
-}
-
-func handleSendMessage(w http.ResponseWriter, r *http.Request) {
-	session := getSession(r)
-	r.ParseMultipartForm(10 << 20)
-	
-	receiverID, _ := strconv.Atoi(r.FormValue("receiverId"))
-	content := r.FormValue("message")
-	
-	var filePath *string
-	file, header, err := r.FormFile("file")
-	if err == nil {
-		defer file.Close()
-		fileName := fmt.Sprintf("%d_%s", time.Now().Unix(), header.Filename)
-		dir := filepath.Join("uploads", "messages")
-		os.MkdirAll(dir, 0755)
-		path := filepath.Join(dir, fileName)
-		out, _ := os.Create(path)
-		defer out.Close()
-		io.Copy(out, file)
-		filePath = &fileName
-	}
-
-	msg := Message{SenderID: session.UserID, ReceiverID: receiverID, Content: content, FilePath: filePath}
-	db.Create(&msg)
-	respondJSON(w, http.StatusOK, Response{Success: true})
-}
-
-// ===== INVITATIONS =====
-
-func handleGetInvitations(w http.ResponseWriter, r *http.Request) {
-	session := getSession(r)
-	var contacts []Contact
-	db.Where("iddestinataire = ? AND statut = 'en_attente'", session.UserID).Find(&contacts)
-
-	var invits []Invitation
-	for _, c := range contacts {
-		var u Compte
-		db.First(&u, c.SenderID)
-		invits = append(invits, Invitation{ID: c.ID, SenderID: c.SenderID, SenderUsername: u.Username})
-	}
-	respondJSON(w, http.StatusOK, Response{Success: true, Data: invits})
-}
-
-func handleSendInvitation(w http.ResponseWriter, r *http.Request) {
-	session := getSession(r)
-	pseudo := r.FormValue("pseudoDestinataire")
-	
-	var dest Compte
-	if err := db.Where("identifiant = ?", pseudo).First(&dest).Error; err != nil {
-		respondJSON(w, http.StatusNotFound, Response{Success: false, Error: "Inconnu"})
-		return
-	}
-
-	db.Create(&Contact{SenderID: session.UserID, ReceiverID: dest.ID, Status: "en_attente"})
-	respondJSON(w, http.StatusOK, Response{Success: true})
-}
-
-func handleInvitationResponse(w http.ResponseWriter, r *http.Request) {
-	session := getSession(r)
-	senderID, _ := strconv.Atoi(r.FormValue("senderId"))
-	action := r.FormValue("action")
-
-	if action == "accepter" {
-		db.Model(&Contact{}).Where("idpossesseur = ? AND iddestinataire = ?", senderID, session.UserID).Update("statut", "accepte")
-		// Créer le lien retour
-		db.FirstOrCreate(&Contact{}, Contact{SenderID: session.UserID, ReceiverID: senderID, Status: "accepte"})
-	} else {
-		db.Where("idpossesseur = ? AND iddestinataire = ?", senderID, session.UserID).Delete(&Contact{})
-	}
-	respondJSON(w, http.StatusOK, Response{Success: true})
-}
-
-// ===== UTILS =====
-
-func getEnv(key, fallback string) string {
-	if value, ok := os.LookupEnv(key); ok { return value }
-	return fallback
-}
-
-func getSession(r *http.Request) *Session {
-    c, err := r.Cookie("session_id")
-    if err != nil { 
-        return nil 
-    }
-    s, ok := sessions[c.Value]
-    if !ok {
-        log.Printf("Session ID trouvé dans cookie mais inconnu du serveur: %s", c.Value)
-        return nil
-    }
-    return s
 }
 
 func generateSessionID() string {
@@ -425,11 +289,6 @@ func respondJSON(w http.ResponseWriter, status int, data interface{}) {
 	json.NewEncoder(w).Encode(data)
 }
 
-func handleLogout(w http.ResponseWriter, r *http.Request) {
-	http.SetCookie(w, &http.Cookie{Name: "session_id", Value: "", Path: "/", MaxAge: -1})
-	respondJSON(w, http.StatusOK, Response{Success: true})
-}
-
 func handleGetSession(w http.ResponseWriter, r *http.Request) {
 	s := getSession(r)
 	if s == nil { respondJSON(w, http.StatusOK, Response{Success: false}); return }
@@ -446,4 +305,123 @@ func redirectHome(w http.ResponseWriter, r *http.Request) {
 	} else {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 	}
+}
+
+func getEnv(key, fallback string) string {
+	if value, ok := os.LookupEnv(key); ok { return value }
+	return fallback
+}
+
+// --- Remets tes fonctions handleGetContacts, handleGetMessages etc. ici ---
+func handleSignup(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		serveHTML(w, r, "front/template/inscription.html")
+		return
+	}
+	username := r.FormValue("identifiant")
+	password := r.FormValue("password")
+	var count int64
+	db.Model(&Compte{}).Where("identifiant = ?", username).Count(&count)
+	if count > 0 {
+		respondJSON(w, http.StatusBadRequest, Response{Success: false, Error: "Existe déjà"})
+		return
+	}
+	key := make([]byte, 32)
+	rand.Read(key)
+	iv := make([]byte, 16)
+	rand.Read(iv)
+	encrypted := encryptPass(password, key, iv)
+	newCompte := Compte{Username: username, Password: encrypted, IV: iv, Key: key}
+	if err := db.Create(&newCompte).Error; err != nil {
+		respondJSON(w, http.StatusInternalServerError, Response{Success: false, Error: "Erreur création"})
+		return
+	}
+	respondJSON(w, http.StatusOK, Response{Success: true})
+}
+
+func handleGetContacts(w http.ResponseWriter, r *http.Request) {
+	session := getSession(r)
+	var comptes []Compte
+	db.Raw("SELECT * FROM compte WHERE idcompte IN (SELECT iddestinataire FROM contact WHERE idpossesseur = ? AND statut = 'accepte')", session.UserID).Scan(&comptes)
+	var contacts []ContactResponse
+	for _, c := range comptes {
+		contacts = append(contacts, ContactResponse{ID: c.ID, Username: c.Username})
+	}
+	respondJSON(w, http.StatusOK, Response{Success: true, Data: contacts})
+}
+
+func handleGetMessages(w http.ResponseWriter, r *http.Request) {
+	session := getSession(r)
+	contactID := r.URL.Query().Get("contact")
+	cID, _ := strconv.Atoi(contactID)
+	var messages []Message
+	db.Where("(idemetteur = ? AND idreceveur = ?) OR (idemetteur = ? AND idreceveur = ?)", 
+		session.UserID, cID, cID, session.UserID).Order("date_creation ASC").Find(&messages)
+	for i, msg := range messages {
+		var sender Compte
+		db.Select("identifiant").Where("idcompte = ?", msg.SenderID).First(&sender)
+		messages[i].SenderName = sender.Username
+	}
+	respondJSON(w, http.StatusOK, Response{Success: true, Data: messages})
+}
+
+func handleSendMessage(w http.ResponseWriter, r *http.Request) {
+	session := getSession(r)
+	r.ParseMultipartForm(10 << 20)
+	receiverID, _ := strconv.Atoi(r.FormValue("receiverId"))
+	content := r.FormValue("message")
+	var filePath *string
+	file, header, err := r.FormFile("file")
+	if err == nil {
+		defer file.Close()
+		fileName := fmt.Sprintf("%d_%s", time.Now().Unix(), header.Filename)
+		dir := filepath.Join("uploads", "messages")
+		os.MkdirAll(dir, 0755)
+		path := filepath.Join(dir, fileName)
+		out, _ := os.Create(path)
+		defer out.Close()
+		io.Copy(out, file)
+		filePath = &fileName
+	}
+	msg := Message{SenderID: session.UserID, ReceiverID: receiverID, Content: content, FilePath: filePath}
+	db.Create(&msg)
+	respondJSON(w, http.StatusOK, Response{Success: true})
+}
+
+func handleGetInvitations(w http.ResponseWriter, r *http.Request) {
+	session := getSession(r)
+	var contacts []Contact
+	db.Where("iddestinataire = ? AND statut = 'en_attente'", session.UserID).Find(&contacts)
+	var invits []Invitation
+	for _, c := range contacts {
+		var u Compte
+		db.First(&u, c.SenderID)
+		invits = append(invits, Invitation{ID: c.ID, SenderID: c.SenderID, SenderUsername: u.Username})
+	}
+	respondJSON(w, http.StatusOK, Response{Success: true, Data: invits})
+}
+
+func handleSendInvitation(w http.ResponseWriter, r *http.Request) {
+	session := getSession(r)
+	pseudo := r.FormValue("pseudoDestinataire")
+	var dest Compte
+	if err := db.Where("identifiant = ?", pseudo).First(&dest).Error; err != nil {
+		respondJSON(w, http.StatusNotFound, Response{Success: false, Error: "Inconnu"})
+		return
+	}
+	db.Create(&Contact{SenderID: session.UserID, ReceiverID: dest.ID, Status: "en_attente"})
+	respondJSON(w, http.StatusOK, Response{Success: true})
+}
+
+func handleInvitationResponse(w http.ResponseWriter, r *http.Request) {
+	session := getSession(r)
+	senderID, _ := strconv.Atoi(r.FormValue("senderId"))
+	action := r.FormValue("action")
+	if action == "accepter" {
+		db.Model(&Contact{}).Where("idpossesseur = ? AND iddestinataire = ?", senderID, session.UserID).Update("statut", "accepte")
+		db.FirstOrCreate(&Contact{}, Contact{SenderID: session.UserID, ReceiverID: senderID, Status: "accepte"})
+	} else {
+		db.Where("idpossesseur = ? AND iddestinataire = ?", senderID, session.UserID).Delete(&Contact{})
+	}
+	respondJSON(w, http.StatusOK, Response{Success: true})
 }
