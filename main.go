@@ -188,7 +188,7 @@ func main() {
 
 	// Servir les fichiers statiques
 	fs := http.FileServer(http.Dir("front"))
-	http.Handle("/front/", http.StripPrefix("/front/", fs))
+	http.Handle("../front/", http.StripPrefix("/front/", fs))
 
 	port = config.Port
 	if port == "" {
@@ -260,14 +260,14 @@ func redirectHome(w http.ResponseWriter, r *http.Request) {
 	if session != nil && session.Access == "pass" {
 		http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
 	} else {
-		http.Redirect(w, r, "/front/template/login.html", http.StatusSeeOther)
+		http.Redirect(w, r, "../front/template/login.html", http.StatusSeeOther)
 	}
 }
 
 // handleLogin traite la connexion avec GORM
 func handleLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		serveHTML(w, "front/template/login.html")
+		serveHTML(w, "../front/template/login.html")
 		return
 	}
 
@@ -340,7 +340,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 // handleSignup traite l'inscription avec GORM
 func handleSignup(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		serveHTML(w, "front/template/inscription.html")
+		serveHTML(w, "../front/template/inscription.html")
 		return
 	}
 
@@ -401,7 +401,7 @@ func handleSignup(w http.ResponseWriter, r *http.Request) {
 
 // handleDashboard sert la page du tableau de bord
 func handleDashboard(w http.ResponseWriter, r *http.Request) {
-	serveHTML(w, "front/template/dashboard.html")
+	serveHTML(w, "../front/template/dashboard.html")
 }
 
 // handleGetContacts retourne les contacts avec GORM
@@ -786,7 +786,7 @@ func requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := getSession(r)
 		if session == nil {
-			http.Redirect(w, r, "/front/template/login.html", http.StatusSeeOther)
+			http.Redirect(w, r, "../front/template/login.html", http.StatusSeeOther)
 			return
 		}
 		next(w, r)
