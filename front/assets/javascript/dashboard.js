@@ -5,8 +5,13 @@ let currentUserId = null;
 let currentContactId = null;
 
 // =========================
-// Initialisation
+// Initialisation au chargement
 // =========================
+document.addEventListener('DOMContentLoaded', () => {
+    initDashboard();
+    setupEventListeners();
+});
+
 async function initDashboard() {
     try {
         const response = await fetch('/api/session');
@@ -18,8 +23,9 @@ async function initDashboard() {
         }
 
         currentUserId = data.data.id;
+        // Correction de l'affichage du nom
         document.getElementById('username').textContent = data.data.user;
-        document.getElementById('content').style.display = 'block';
+        document.getElementById('content').style.display = 'flex'; // 'flex' pour respecter ton CSS
         
         loadContacts();
         loadInvitations();
@@ -30,442 +36,155 @@ async function initDashboard() {
 }
 
 // =========================
-// Charger les contacts
+// Gestionnaires d'événements
 // =========================
+function setupEventListeners() {
+    // Envoi de message
+    document.getElementById('sendMessageForm')?.addEventListener('submit', handleSendMessage);
+
+    // Modal Nouveau Contact
+    const dialog = document.getElementById('favDialog');
+    document.getElementById('showDialog')?.addEventListener('click', () => dialog.showModal());
+    document.getElementById('cancelBtn')?.addEventListener('click', () => dialog.close());
+    document.getElementById('formInvitation')?.addEventListener('submit', handleSendInvitation);
+
+    // Menu pièces jointes
+    const btnPJ = document.getElementById('piece-jointe');
+    const menuPJ = document.querySelector('.piece-jointe-menu');
+    btnPJ?.addEventListener('click', () => menuPJ.classList.toggle('piece-jointe-menu-ouvert'));
+
+    // Auto-resize textarea
+    const textarea = document.getElementById('messageRediger');
+    textarea?.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = (this.scrollHeight) + 'px';
+    });
+
+    // Feedback visuel upload
+    document.querySelectorAll('input[type="file"]').forEach(input => {
+        input.addEventListener('change', function() {
+            if (this.files && this.files[0]) {
+                document.getElementById('piece-jointe').style.backgroundColor = '#4caf50';
+                Swal.fire({ icon: 'info', title: 'Fichier prêt', text: this.files[0].name, timer: 1000, showConfirmButton: false });
+            }
+        });
+    });
+}
+
+// =========================
+// Fonctions API
+// =========================
+
 async function loadContacts() {
     try {
         const response = await fetch('/api/contacts');
         const data = await response.json();
-        
-        const contactsList = document.getElementById('contactsList');
+        const list = document.getElementById('contactsList');
         
         if (!data.data || data.data.length === 0) {
-            contactsList.innerHTML = '<p class="contactVide">Aucun contact pour le moment !</p>';
+            list.innerHTML = '<p class="contactVide">Aucun contact</p>';
             return;
         }
 
-        contactsList.innerHTML = data.data.map(contact => `
-            <a href="#" onclick="selectContact(${contact.id}); return false;" 
-               class="contactItem ${currentContactId === contact.id ? 'active' : ''}">
-                <img src="../assets/images/avatar.jpg" alt="avatar">
-                <span>${escapeHtml(contact.username)}</span>
+        list.innerHTML = data.data.map(c => `
+            <a href="#" onclick="selectContact(${c.id}, this); return false;" class="contactItem ${currentContactId === c.id ? 'active' : ''}">
+                <img src="/front/assets/images/avatar.jpg" alt="avatar">
+                <span>${escapeHtml(c.username)}</span>
             </a>
         `).join('');
-    } catch (error) {
-        console.error('Erreur chargement contacts:', error);
-    }
+    } catch (e) { console.error(e); }
 }
 
-// =========================
-// Charger les invitations
-// =========================
-async function loadInvitations() {
-    try {
-        const response = await fetch('/api/invitations');
-        const data = await response.json();
-        
-        const invitationsList = document.getElementById('invitationsList');
-        
-        if (!data.data || data.data.length === 0) {
-            invitationsList.innerHTML = '<p class="aucuneInvitation">Aucune invitation</p>';
-            return;
-        }
-
-        invitationsList.innerHTML = data.data.map(invitation => `
-            <div class="invitation-item">
-                <div class="invitation-info">
-                    <img src="/front/assets/images/avatar.jpg" alt="avatar">
-                    <span>${escapeHtml(invitation.senderUsername)}</span>
-                </div>
-                <div class="invitation-actions">
-                    <button onclick="respondInvitation(${invitation.senderId}, 'accepter')" class="btn-accepter">✓ Accepter</button>
-                    <button onclick="respondInvitation(${invitation.senderId}, 'refuser')" class="btn-refuser">✕ Refuser</button>
-                </div>
-            </div>
-        `).join('');
-    } catch (error) {
-        console.error('Erreur chargement invitations:', error);
-    }
-}
-
-// =========================
-// Sélectionner un contact
-// =========================
-async function selectContact(contactId) {
+async function selectContact(contactId, element) {
     currentContactId = contactId;
-    document.querySelectorAll('.contactItem').forEach(item => item.classList.remove('active'));
-    event.target.closest('.contactItem')?.classList.add('active');
-    
+    document.querySelectorAll('.contactItem').forEach(i => i.classList.remove('active'));
+    element.classList.add('active');
     document.getElementById('messageForm').style.display = 'block';
     loadMessages(contactId);
 }
 
-// =========================
-// Charger les messages
-// =========================
 async function loadMessages(contactId) {
     try {
         const response = await fetch(`/api/messages?contact=${contactId}`);
         const data = await response.json();
+        const list = document.getElementById('messagesList');
         
-        const messagesList = document.getElementById('messagesList');
-        
-        if (!data.data || data.data.length === 0) {
-            messagesList.innerHTML = '<h3 class="messagesVide">Aucun message pour le moment !</h3>';
-        } else {
-            messagesList.innerHTML = '<h2>Discussion</h2>' + data.data.map(msg => `
-                <div class="message ${msg.sender === currentUserId ? 'emetteur' : 'recepteur'}">
-                    <div class="message-content">
-                        ${msg.filepath ? `
-                            <div class="pj-container">
-                                ${msg.filepath.match(/\.(jpg|jpeg|png|webp)$/i) ? `
-                                    <img src="/uploads/messages/images/${escapeHtml(msg.filepath)}" alt="Image">
-                                ` : `
-                                    <video controls>
-                                        <source src="/uploads/messages/videos/${escapeHtml(msg.filepath)}" type="video/mp4">
-                                    </video>
-                                `}
-                            </div>
-                        ` : ''}
-                        ${msg.content && msg.content !== 'null' ? `
-                            <h3 class="messagesRemplis">${escapeHtml(msg.content)}</h3>
-                        ` : ''}
-                    </div>
-                    <h5 class="date">${new Date(msg.timestamp).toLocaleString('fr-FR')}</h5>
+        list.innerHTML = '<h2>Discussion</h2>' + (data.data || []).map(msg => `
+            <div class="message ${msg.sender === currentUserId ? 'emetteur' : 'recepteur'}">
+                <div class="message-content">
+                    ${msg.filepath ? renderMedia(msg.filepath) : ''}
+                    ${msg.content && msg.content !== 'null' ? `<h3 class="messagesRemplis">${escapeHtml(msg.content)}</h3>` : ''}
                 </div>
-            `).join('');
-        }
-        
-        // Auto-scroll
-        setTimeout(() => {
-            messagesList.scrollTop = messagesList.scrollHeight;
-        }, 100);
-    } catch (error) {
-        console.error('Erreur chargement messages:', error);
-    }
+                <span class="date">${new Date(msg.timestamp).toLocaleString('fr-FR')}</span>
+            </div>
+        `).join('');
+        list.scrollTop = list.scrollHeight;
+    } catch (e) { console.error(e); }
 }
 
-// =========================
-// Envoyer un message
-// =========================
-// =========================
-// Envoyer un message
-// =========================
-document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('sendMessageForm')?.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        
-        if (!currentContactId) {
-            Swal.fire('Erreur', 'Veuillez sélectionner un contact', 'error');
-            return;
-        }
-
-        const formData = new FormData();
-        formData.append('receiverId', currentContactId);
-        formData.append('message', document.getElementById('messageRediger').value.trim());
-        
-        const imageFile = document.getElementById('uploadImage').files[0];
-        const videoFile = document.getElementById('uploadVideo').files[0];
-        
-        if (imageFile) {
-            formData.append('file', imageFile);
-            formData.append('fileType', 'image');
-            formData.append('filename', imageFile.name);
-        } else if (videoFile) {
-            formData.append('file', videoFile);
-            formData.append('fileType', 'video');
-            formData.append('filename', videoFile.name);
-        }
-
-        try {
-            const response = await fetch('/api/send-message', {
-                method: 'POST',
-                body: formData
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-                document.getElementById('messageRediger').value = '';
-                document.getElementById('uploadImage').value = '';
-                document.getElementById('uploadVideo').value = '';
-                
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Message envoyé',
-                    timer: 1500,
-                    showConfirmButton: false
-                });
-                
-                loadMessages(currentContactId);
-            } else {
-                Swal.fire('Erreur', data.error || 'Erreur lors de l\'envoi', 'error');
-            }
-        } catch (error) {
-            console.error('Erreur envoi message:', error);
-            Swal.fire('Erreur', 'Erreur serveur', 'error');
-        }
-    });
-
-    // =========================
-    // Modal "Nouveau contact"
-    // =========================
-    const dialog = document.getElementById('favDialog');
-    const showButton = document.getElementById('showDialog');
-    const cancelBtn = document.getElementById('cancelBtn');
-    const formInvitation = document.getElementById('formInvitation');
-    const inputContact = document.getElementById('nomNouveauContact');
-
-    showButton?.addEventListener('click', () => {
-        dialog.showModal();
-        inputContact.focus();
-    });
-
-    cancelBtn?.addEventListener('click', (e) => {
-        e.preventDefault();
-        dialog.close();
-        inputContact.value = '';
-    });
-
-    dialog?.addEventListener('click', (e) => {
-        if (e.target === dialog) {
-            dialog.close();
-        }
-    });
-
-    formInvitation?.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        
-        const pseudo = inputContact.value.trim();
-        
-        if (!pseudo) {
-            Swal.fire('Champ vide', 'Veuillez entrer un pseudo', 'warning');
-            return;
-        }
-
-        try {
-            const response = await fetch('/api/send-invitation', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `pseudoDestinataire=${encodeURIComponent(pseudo)}`
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-                Swal.fire('Invitation envoyée', data.message, 'success');
-                dialog.close();
-                inputContact.value = '';
-                loadContacts();
-            } else {
-                Swal.fire('Erreur', data.error, 'error');
-            }
-        } catch (error) {
-            console.error('Erreur invitation:', error);
-            Swal.fire('Erreur', 'Erreur serveur', 'error');
-        }
-    });
-
-    // =========================
-    // Menu pièces jointes
-    // =========================
-    const btnPieceJointe = document.getElementById('piece-jointe');
-    const menuPieceJointe = document.querySelector('.piece-jointe-menu');
-
-    btnPieceJointe?.addEventListener('click', () => {
-        menuPieceJointe.classList.toggle('piece-jointe-menu-ouvert');
-    });
-
-    // =========================
-    // Auto-resize textarea
-    // =========================
-    const textarea = document.getElementById('messageRediger');
-    if (textarea) {
-        textarea.addEventListener('input', () => {
-            textarea.style.height = 'auto';
-            textarea.style.height = textarea.scrollHeight + 'px';
-        });
-    }
-
-    // =========================
-    // Détecter le changement sur les inputs file
-    // =========================
-    document.querySelectorAll('input[type="file"]').forEach(input => {
-        input.addEventListener('change', function() {
-            if (this.files && this.files[0]) {
-                const btn = document.getElementById('piece-jointe');
-                btn.style.backgroundColor = '#4caf50';
-
-                Swal.fire({
-                    icon: 'info',
-                    title: 'Fichier sélectionné',
-                    text: this.files[0].name,
-                    timer: 1500,
-                    showConfirmButton: false
-                });
-            }
-        });
-    });
-});
-
-// =========================
-// Répondre à une invitation
-// =========================
-async function respondInvitation(senderId, action) {
-    try {
-        const response = await fetch('/api/invitation-response', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: `senderId=${senderId}&action=${action}`
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            loadInvitations();
-            loadContacts();
-        }
-    } catch (error) {
-        console.error('Erreur réponse invitation:', error);
-    }
-}
-
-// =========================
-// Déconnexion
-// =========================
-async function deconnexion() {
-    try {
-        await fetch('/api/logout', { method: 'POST' });
-        window.location.href = '/front/template/login.html';
-    } catch (error) {
-        console.error('Erreur déconnexion:', error);
-        window.location.href = '/front/template/login.html';
-    }
-}
-
-// =========================
-// Utilitaires
-// =========================
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-// =========================
-// Modal "Nouveau contact"
-// =========================
-const dialog = document.getElementById("favDialog");
-const showButton = document.getElementById("showDialog");
-const cancelBtn = document.getElementById("cancelBtn");
-const inputContact = document.getElementById("nomNouveauContact");
-
-showButton?.addEventListener("click", () => {
-    dialog.showModal();
-    inputContact.focus();
-});
-
-cancelBtn?.addEventListener("click", (e) => {
+async function handleSendMessage(e) {
     e.preventDefault();
-    dialog.close();
-    inputContact.value = "";
-});
+    const formData = new FormData(e.target);
+    formData.append('receiverId', currentContactId);
 
-// Fermer en cliquant hors modale
-dialog?.addEventListener("click", (e) => {
-    if (e.target === dialog) {
-        dialog.close();
+    const img = document.getElementById('uploadImage').files[0];
+    const vid = document.getElementById('uploadVideo').files[0];
+    if (img) { formData.append('file', img); formData.append('fileType', 'image'); }
+    else if (vid) { formData.append('file', vid); formData.append('fileType', 'video'); }
+
+    const res = await fetch('/api/send-message', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (data.success) {
+        e.target.reset();
+        document.getElementById('piece-jointe').style.backgroundColor = '';
+        loadMessages(currentContactId);
     }
-});
-
-// =========================
-// Auto-scroll messages
-// =========================
-const messagesBox = document.querySelector(".messages");
-if (messagesBox) {
-    messagesBox.scrollTop = messagesBox.scrollHeight;
 }
 
-// =========================
-// Auto-resize textarea
-// =========================
-const textarea = document.getElementById("messageRediger");
-
-textarea?.addEventListener("input", () => {
-    textarea.style.height = "auto";
-    textarea.style.height = textarea.scrollHeight + "px";
-});
-
-
-// =========================
-// Envoie de l'invitation
-// =========================
-
-document.getElementById("formInvitation").addEventListener("submit", function (e) {
+async function handleSendInvitation(e) {
     e.preventDefault();
-
-    const pseudo = document.getElementById("nomNouveauContact").value.trim();
-
-    if (pseudo === "") {
-        Swal.fire({
-            icon: "warning",
-            title: "Champ vide",
-            text: "Veuillez entrer un pseudo"
-        });
-        return;
-    }
-
-    fetch("./ajax/invitation.inc.php", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/x-www-form-urlencoded"
-        },
-        body: new URLSearchParams({
-            pseudoDestinataire: pseudo
-        })
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success) {
-            Swal.fire("Invitation envoyée", data.message, "success");
-            dialog.close();
-        } else {
-            Swal.fire("Erreur", data.error, "error");
-        }
-    })
-    .catch(err => console.error(err));
-});
-
-
-// =========================
-// Menu pièces jointes
-// =========================
-
-const btnPieceJointe = document.getElementById("piece-jointe");
-const menuPieceJointe = document.querySelector(".piece-jointe-menu");
-
-btnPieceJointe.addEventListener("click", () => {
-    menuPieceJointe.classList.toggle("piece-jointe-menu-ouvert");
-});
-
-
-// =========================
-// Détecter le changement sur les inputs file
-// =========================
-
-document.querySelectorAll('input[type="file"]').forEach(input => {
-    input.addEventListener('change', function() {
-        if (this.files && this.files[0]) {
-            const btn = document.getElementById('piece-jointe');
-            btn.style.backgroundColor = '#4caf50';
-
-            Swal.fire({
-                icon: 'info',
-                title: 'Fichier sélectionné',
-                text: this.files[0].name,
-                timer: 1500,
-                showConfirmButton: false
-            });
-        }
+    const pseudo = document.getElementById('nomNouveauContact').value.trim();
+    const res = await fetch('/api/send-invitation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `pseudoDestinataire=${encodeURIComponent(pseudo)}`
     });
-});
+    const data = await res.json();
+    if (data.success) {
+        Swal.fire('Succès', 'Invitation envoyée', 'success');
+        document.getElementById('favDialog').close();
+        e.target.reset();
+    } else {
+        Swal.fire('Erreur', data.error, 'error');
+    }
+}
+
+// Helpers
+function escapeHtml(t) {
+    const d = document.createElement('div');
+    d.textContent = t;
+    return d.innerHTML;
+}
+
+function renderMedia(path) {
+    if (path.match(/\.(jpg|jpeg|png|webp)$/i)) {
+        return `<div class="pj-container"><img src="/uploads/messages/images/${path}" alt="Image"></div>`;
+    }
+    return `<div class="pj-container"><video controls><source src="/uploads/messages/videos/${path}" type="video/mp4"></video></div>`;
+}
+
+// Ces fonctions doivent être globales pour les onclick du HTML
+window.selectContact = selectContact;
+window.respondInvitation = async (senderId, action) => {
+    await fetch('/api/invitation-response', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `senderId=${senderId}&action=${action}`
+    });
+    loadInvitations();
+    loadContacts();
+};
+window.deconnexion = async () => {
+    await fetch('/api/logout', { method: 'POST' });
+    window.location.href = '/front/template/login.html';
+};
