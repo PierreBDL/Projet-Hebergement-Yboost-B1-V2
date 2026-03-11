@@ -250,7 +250,10 @@ func connectDB() (*gorm.DB, error) {
 		dialector = mysql.Open(dsn)
 	}
 
-	db, err := gorm.Open(dialector, &gorm.Config{})
+	db, err = gorm.Open(postgres.New(postgres.Config{
+		DSN: config.DatabaseURL,
+		PreferSimpleProtocol: true,
+	}), &gorm.Config{})
 	return db, err
 }
 
