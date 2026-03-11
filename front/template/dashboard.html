@@ -49,10 +49,17 @@
                         <button id="showDialog">Nouveau contact</button>
                     </p>
                 </div>
+
+                <div class="joke-widget">
+                    <div class="joke-header">
+                        <span>Joke of the day</span>
+                        <button class="joke-refresh" onclick="jokeFunc()" title="Nouvelle blague">🔄</button>
+                    </div>
+                    <p class="joke-text" id="jokeText">Chargement...</p>
+                </div>
             </div>
 
             <div id="discussion">
-                <!-- Header discussion avec bouton retour (mobile) -->
                 <div class="discussion-header">
                     <button id="backBtn" onclick="goBackToContacts()">&#8592;</button>
                     <h2 id="discussionTitle">Discussion</h2>

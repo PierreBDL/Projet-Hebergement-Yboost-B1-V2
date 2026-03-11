@@ -130,6 +130,7 @@ func main() {
 	http.HandleFunc("/api/invitations", handleGetInvitations)
 	http.HandleFunc("/api/send-invitation", handleSendInvitation)
 	http.HandleFunc("/api/invitation-response", handleInvitationResponse)
+	http.HandleFunc("/api/joke", joke)
 
 	port := config.Port
 	if port == "" {
@@ -493,4 +494,35 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 func redirectHome(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/front/template/login.html", http.StatusSeeOther)
+}
+
+// Météo
+
+func joke(w http.ResponseWriter, r *http.Request) {
+	req, _:= http.NewRequest("GET", "https://icanhazdadjoke.com/", nil)
+	req.Header.Set("Accept", "application/json")
+
+	// Utilisation d'un client HTTP pour faire la requête
+	client := &http.Client{}
+	resp, err := client.Do(req)
+
+	// Gestion des erreurs
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, Response{Success: false, Error: "Erreur lors de la récupération de la blague"})
+		return
+	}
+	
+	// Fermer le corps de la réponse après utilisation
+	defer resp.Body.Close()
+
+	// Struct
+	var result struct {
+		Joke string `json:"joke"`
+	}
+
+	// Parsing de la réponse JSON
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	// Répondre avec la blague récupérée
+	respondJSON(w, http.StatusOK, Response{Success: true, Data: result.Joke})
 }

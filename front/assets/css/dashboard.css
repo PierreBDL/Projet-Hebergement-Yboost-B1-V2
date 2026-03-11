@@ -722,3 +722,55 @@ dialog button[type="submit"] {
     background-color: #fff;
     margin-top: 4px;
 }
+
+/* ===== Widget Blague ===== */
+
+.joke-widget {
+    margin-top: auto;
+    padding: 12px 14px;
+    background: linear-gradient(135deg, #fff8e1, #fff3cd);
+    border-left: 3px solid #ffc107;
+    border-radius: 10px;
+    margin-top: 20px;
+}
+
+.joke-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.joke-header span {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.joke-refresh {
+    background: none !important;
+    border: none !important;
+    width: auto !important;
+    height: auto !important;
+    border-radius: 50% !important;
+    padding: 4px !important;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: transform 0.3s ease !important;
+    line-height: 1;
+}
+
+.joke-refresh:hover {
+    transform: rotate(180deg) !important;
+    background-color: rgba(0,0,0,0.05) !important;
+}
+
+.joke-text {
+    font-size: 0.85rem;
+    color: #555;
+    line-height: 1.5;
+    margin: 0;
+    font-style: italic;
+}

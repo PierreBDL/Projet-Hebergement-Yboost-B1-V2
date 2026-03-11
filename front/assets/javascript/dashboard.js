@@ -48,6 +48,7 @@ async function initDashboard() {
         document.getElementById('content').style.display = 'flex';
         loadContacts();
         loadInvitations();
+        jokeFunc();
     } catch (error) {
         console.error('Erreur initialisation:', error);
     }
@@ -347,4 +348,14 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.appendChild(document.createTextNode(text));
     return div.innerHTML;
+}
+
+// =========================
+// Blague
+// =========================
+async function jokeFunc() {
+    const jokeDiv = document.getElementById('jokeText');
+    const res = await fetch('/api/joke');
+    const data = await res.json();
+    jokeDiv.innerHTML = `<p>${escapeHtml(data.data)}</p>`;
 }
