@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <link rel="stylesheet" href="../assets/css/commun/header.css">
+    <link rel="stylesheet" href="../assets/css/commun/footer.css">
+    <link rel="stylesheet" href="../assets/css/inscriptionLogin.css">
+    <title>Connexion</title>
+</head>
+<body>
+    <header>
+        <img src="../assets/images/logo.avif" alt="logo">
+
+        <nav>
+            <a href="./login.html" class="active">Connexion</a>
+            <a href="./inscription.html">Inscription</a>
+        </nav>
+    </header>
+
+    <main>
+        <form id="loginForm" class="form_inscription">
+            <fieldset>
+                <legend>Connexion</legend>
+                
+                <label for="identifiant">Identifiant</label>
+                <input type="text" id="identifiant" name="identifiant" required>
+
+                <label for="password">Mot de passe</label>
+                <input type="password" id="password" name="password" required>
+
+                <div id="messageAlerte" class="message_alerte" style="display: none;"></div>
+
+                <button type="submit" id="connexionBtn">Se connecter</button>
+            </fieldset>
+        </form>
+    </main>
+
+    <footer>
+        <h5>© 2026 Pierre</h5>
+    </footer>
+
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const identifiant = document.getElementById('identifiant').value;
+            const password = document.getElementById('password').value;
+            const messageDiv = document.getElementById('messageAlerte');
+
+            try {
+                const response = await fetch('/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: `identifiant=${encodeURIComponent(identifiant)}&password=${encodeURIComponent(password)}`
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    window.location.href = '/dashboard';
+                } else {
+                    messageDiv.textContent = data.error || 'Erreur de connexion';
+                    messageDiv.style.display = 'block';
+                }
+            } catch (error) {
+                messageDiv.textContent = 'Erreur serveur';
+                messageDiv.style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>
