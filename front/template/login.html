@@ -57,7 +57,7 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    window.location.href = '/front/template/dashboard.html';
+                    window.location.href = '/dashboard';
                 } else {
                     messageDiv.textContent = data.error || 'Erreur de connexion';
                     messageDiv.style.display = 'block';
