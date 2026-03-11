@@ -190,9 +190,9 @@ func connectDB() (*gorm.DB, error) {
 
 func handleLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		serveHTML(w, "front/template/login.html")
-		return
-	}
+        serveHTML(w, r, "front/template/login.html")
+        return
+    }
 
 	username := r.FormValue("identifiant")
 	password := r.FormValue("password")
@@ -226,7 +226,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 
 func handleSignup(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		serveHTML(w, "front/template/inscription.html")
+		serveHTML(w, r, "front/template/inscription.html")
 		return
 	}
 
@@ -408,7 +408,7 @@ func requireAuth(next http.HandlerFunc) http.HandlerFunc {
 
 func serveHTML(w http.ResponseWriter, path string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	http.ServeFile(w, nil, path)
+	http.ServeFile(w, r, path)
 }
 
 func respondJSON(w http.ResponseWriter, status int, data interface{}) {
@@ -429,7 +429,7 @@ func handleGetSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleDashboard(w http.ResponseWriter, r *http.Request) {
-	serveHTML(w, "front/template/dashboard.html")
+	serveHTML(w, r, "front/template/dashboard.html")
 }
 
 func redirectHome(w http.ResponseWriter, r *http.Request) {
