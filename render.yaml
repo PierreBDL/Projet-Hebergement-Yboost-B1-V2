@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: messagerie-app
+    runtime: go
+    buildCommand: cd server && go build -tags netgo -ldflags '-s -w' -o ../app
+    startCommand: ./app
+    envVars:
+      - key: PORT
+        value: 3000
