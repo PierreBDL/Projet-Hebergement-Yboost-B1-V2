@@ -165,13 +165,13 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	var compte Compte
 	if err := db.Where("identifiant = ?", username).First(&compte).Error; err != nil {
-		respondJSON(w, http.StatusUnauthorized, Response{Success: false, Error: "Identifiants incorrects"})
+		respondJSON(w, http.StatusUnauthorized, Response{Success: false, Error: "Identifiants ou mot de passe incorrect"})
 		return
 	}
 
 	decrypted, _ := decryptPass(compte.Password, compte.Key, compte.IV)
 	if decrypted != password {
-		respondJSON(w, http.StatusUnauthorized, Response{Success: false, Error: "Identifiants incorrects"})
+		respondJSON(w, http.StatusUnauthorized, Response{Success: false, Error: "Identifiants ou mot de passe incorrect"})
 		return
 	}
 
