@@ -355,14 +355,15 @@ function escapeHtml(text) {
 // =========================
 async function jokeFunc() {
     const jokeDiv = document.getElementById('jokeText');
-    const res = await fetch('/api/joke');
-
-    // No response handling, just display error message
-    if (!res.ok) {
-        jokeDiv.innerHTML = `<p>Impossible de charger une blague pour le moment.</p>`;
-        return;
+    try {
+        const res = await fetch('/api/joke');
+        if (!res.ok) {
+            jokeDiv.textContent = 'Impossible de charger une blague pour le moment.';
+            return;
+        }
+        const data = await res.json();
+        jokeDiv.textContent = data.data;
+    } catch (err) {
+        jokeDiv.textContent = 'Impossible de charger une blague pour le moment.';
     }
-
-    const data = await res.json();
-    jokeDiv.innerHTML = `<p>${escapeHtml(data.data)}</p>`;
 }
