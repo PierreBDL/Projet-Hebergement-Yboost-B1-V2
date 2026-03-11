@@ -60,7 +60,7 @@
                     localStorage.setItem('session_token', data.data.token);
                     window.location.href = '/dashboard';
                 } else {
-                    messageDiv.textContent = data.error || 'Erreur de connexion';
+                    messageDiv.textContent = data.error || 'Identifiant ou mot de passe incorrect';
                     messageDiv.style.display = 'block';
                 }
             } catch (error) {

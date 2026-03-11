@@ -8,11 +8,13 @@ main {
     display: flex;
     justify-content: center;
     align-items: center;
-    height: calc(100vh - 70px - 30px); /* header height + footer height */
+    height: calc(100vh - 70px - 30px); /* header + footer */
+    padding: 20px;
 }
 
 .form_inscription {
-    width: 400px;
+    width: 100%;
+    max-width: 400px;
     background-color: #fff;
     padding: 30px;
     border-radius: 10px;
@@ -47,6 +49,7 @@ main {
     font-size: 1rem;
     outline: none;
     transition: border 0.3s;
+    width: 100%;
 }
 
 .form_inscription input:focus {
@@ -74,8 +77,39 @@ main {
     font-weight: 600;
     cursor: pointer;
     transition: background-color 0.3s;
+    width: 100%;
 }
 
 .form_inscription button:hover {
     background-color: #ccc;
+}
+
+/* ===== RESPONSIVE ===== */
+
+@media (max-width: 480px) {
+    main {
+        height: calc(100vh - 60px - 24px);
+        padding: 16px;
+        align-items: flex-start;
+        padding-top: 30px;
+    }
+
+    .form_inscription {
+        padding: 20px 16px;
+        border-radius: 8px;
+    }
+
+    .form_inscription legend {
+        font-size: 1.2rem;
+    }
+
+    .form_inscription input {
+        font-size: 0.95rem;
+        padding: 9px;
+    }
+
+    .form_inscription button {
+        padding: 12px;
+        font-size: 0.95rem;
+    }
 }

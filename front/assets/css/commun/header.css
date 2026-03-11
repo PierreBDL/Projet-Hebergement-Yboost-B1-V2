@@ -37,3 +37,25 @@ nav a {
 nav a.active, nav a:hover {
     background-color: #ddd;
 }
+
+/* ===== RESPONSIVE ===== */
+
+@media (max-width: 480px) {
+    header {
+        padding: 0 12px;
+        height: 60px;
+    }
+
+    header img {
+        height: 65%;
+    }
+
+    nav {
+        gap: 8px;
+    }
+
+    nav a {
+        padding: 6px 10px;
+        font-size: 0.85rem;
+    }
+}

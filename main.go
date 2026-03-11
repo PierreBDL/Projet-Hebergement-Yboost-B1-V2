@@ -125,6 +125,8 @@ func main() {
 	http.HandleFunc("/api/contacts", handleGetContacts)
 	http.HandleFunc("/api/messages", handleGetMessages)
 	http.HandleFunc("/api/send-message", handleSendMessage)
+	http.HandleFunc("/api/edit-message", handleEditMessage)
+	http.HandleFunc("/api/delete-message", handleDeleteMessage)
 	http.HandleFunc("/api/invitations", handleGetInvitations)
 	http.HandleFunc("/api/send-invitation", handleSendInvitation)
 	http.HandleFunc("/api/invitation-response", handleInvitationResponse)
@@ -137,15 +139,13 @@ func main() {
 	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
 
-// ===== AUTH & SESSION (CORRIGÉ POUR LOCALSTORAGE) =====
+// ===== AUTH & SESSION =====
 
 func getSession(r *http.Request) *Session {
-	// CORRECTION : On lit le token depuis le header Authorization envoyé par le JS
 	token := r.Header.Get("Authorization")
 	if token == "" {
 		return nil
 	}
-
 	var s Session
 	if err := db.Where("idsession = ?", token).First(&s).Error; err != nil {
 		return nil
@@ -187,7 +187,6 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// CORRECTION : On renvoie le token au JS pour qu'il le mette dans localStorage
 	respondJSON(w, http.StatusOK, Response{
 		Success: true,
 		Data:    map[string]string{"token": sessionID},
@@ -297,6 +296,67 @@ func handleSendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 	msg := Message{SenderID: session.UserID, ReceiverID: receiverID, Content: content, FilePath: filePath}
 	db.Create(&msg)
+	respondJSON(w, http.StatusOK, Response{Success: true})
+}
+
+// ===== CRUD MESSAGES : EDIT & DELETE =====
+
+func handleEditMessage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		respondJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Error: "Méthode non autorisée"})
+		return
+	}
+	session := getSession(r)
+	if session == nil {
+		respondJSON(w, http.StatusUnauthorized, Response{Success: false})
+		return
+	}
+
+	messageID, _ := strconv.Atoi(r.FormValue("messageId"))
+	newContent := r.FormValue("content")
+
+	if newContent == "" {
+		respondJSON(w, http.StatusBadRequest, Response{Success: false, Error: "Le contenu ne peut pas être vide"})
+		return
+	}
+
+	// Vérifier que le message appartient bien à l'utilisateur connecté
+	var msg Message
+	if err := db.Where("idmessage = ? AND idemetteur = ?", messageID, session.UserID).First(&msg).Error; err != nil {
+		respondJSON(w, http.StatusForbidden, Response{Success: false, Error: "Message introuvable ou non autorisé"})
+		return
+	}
+
+	db.Model(&msg).Update("contenu", newContent)
+	respondJSON(w, http.StatusOK, Response{Success: true})
+}
+
+func handleDeleteMessage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		respondJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Error: "Méthode non autorisée"})
+		return
+	}
+	session := getSession(r)
+	if session == nil {
+		respondJSON(w, http.StatusUnauthorized, Response{Success: false})
+		return
+	}
+
+	messageID, _ := strconv.Atoi(r.FormValue("messageId"))
+
+	// Vérifier que le message appartient bien à l'utilisateur connecté
+	var msg Message
+	if err := db.Where("idmessage = ? AND idemetteur = ?", messageID, session.UserID).First(&msg).Error; err != nil {
+		respondJSON(w, http.StatusForbidden, Response{Success: false, Error: "Message introuvable ou non autorisé"})
+		return
+	}
+
+	// Supprimer le fichier associé si existant
+	if msg.FilePath != nil {
+		os.Remove(filepath.Join("uploads", "messages", *msg.FilePath))
+	}
+
+	db.Delete(&msg)
 	respondJSON(w, http.StatusOK, Response{Success: true})
 }
 

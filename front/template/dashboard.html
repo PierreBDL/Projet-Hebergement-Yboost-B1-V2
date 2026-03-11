@@ -12,7 +12,6 @@
 <body>
     <header>
         <img src="/front/assets/images/logo.avif" alt="logo">
-
         <nav>
             <h4>Connecté en tant que <span id="username"></span></h4>
             <button onclick="deconnexion()" id="deconnexion">Se déconnecter</button>
@@ -31,29 +30,36 @@
 
                 <h3>Mes contacts</h3>
                 <div id="contactsList"></div>
-                
+
                 <div class="nouveauContact">
                     <dialog id="favDialog">
-                    <form id="formInvitation">
-                        <div class="formNouveauContact">
-                            <h3><strong>Nouveau contact</strong></h3>
-                            <label for="nomNouveauContact">Pseudo :</label>
-                            <input type="text" name="nomNouveauContact" id="nomNouveauContact">
-                        </div>
-                        <div>
-                        <button type="button" id="cancelBtn">Annuler</button>
-                        <button type="submit">Envoyer l'invitation</button>
-                        </div>
-                    </form>
+                        <form id="formInvitation">
+                            <div class="formNouveauContact">
+                                <h3><strong>Nouveau contact</strong></h3>
+                                <label for="nomNouveauContact">Pseudo :</label>
+                                <input type="text" name="nomNouveauContact" id="nomNouveauContact">
+                            </div>
+                            <div>
+                                <button type="button" id="cancelBtn">Annuler</button>
+                                <button type="submit">Envoyer l'invitation</button>
+                            </div>
+                        </form>
                     </dialog>
                     <p>
-                    <button id="showDialog">Nouveau contact</button>
+                        <button id="showDialog">Nouveau contact</button>
                     </p>
                 </div>
             </div>
 
             <div id="discussion">
+                <!-- Header discussion avec bouton retour (mobile) -->
+                <div class="discussion-header">
+                    <button id="backBtn" onclick="goBackToContacts()">&#8592;</button>
+                    <h2 id="discussionTitle">Discussion</h2>
+                </div>
+
                 <div class="messages" id="messagesList"></div>
+
                 <div class="rediger" id="messageForm" style="display: none;">
                     <form id="sendMessageForm" enctype="multipart/form-data">
                         <textarea id="messageRediger" name="message" placeholder="Écrire un message..." rows="1"></textarea>

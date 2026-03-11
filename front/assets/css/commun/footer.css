@@ -8,8 +8,22 @@ footer {
     flex-direction: column;
     place-content: center;
     align-items: center;
+    flex-shrink: 0;
 }
 
 footer h5 {
     text-align: center;
+    font-size: 0.75rem;
+}
+
+/* ===== RESPONSIVE ===== */
+
+@media (max-width: 480px) {
+    footer {
+        height: 24px;
+    }
+
+    footer h5 {
+        font-size: 0.65rem;
+    }
 }
