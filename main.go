@@ -366,9 +366,16 @@ func getEnv(key, fallback string) string {
 }
 
 func getSession(r *http.Request) *Session {
-	c, err := r.Cookie("session_id")
-	if err != nil { return nil }
-	return sessions[c.Value]
+    c, err := r.Cookie("session_id")
+    if err != nil { 
+        return nil 
+    }
+    s, ok := sessions[c.Value]
+    if !ok {
+        log.Printf("Session ID trouvé dans cookie mais inconnu du serveur: %s", c.Value)
+        return nil
+    }
+    return s
 }
 
 func generateSessionID() string {
