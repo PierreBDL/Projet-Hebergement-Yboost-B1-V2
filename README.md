@@ -146,8 +146,11 @@ cp .env.example .env.local
 │       ├── login.html                   # Page de connexion
 │       ├── inscription.html             # Page d'inscription
 │       └── dashboard.html               # Interface principale après connexion
-└── uploads/
-    └── messages/                        # Fichiers uploadés par les utilisateurs
+│── uploads/
+│   └── messages/                        # Fichiers uploadés par les utilisateurs
+│── README.md                            # Documentation du projet
+│── .gitignore                           # Fichiers et dossiers à ignorer par git
+└── bddSupabase.png                      # Schéma de la base de données Supabase
 ```
 
 ---
